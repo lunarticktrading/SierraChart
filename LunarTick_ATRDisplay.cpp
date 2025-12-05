@@ -7,9 +7,20 @@ enum ATRDisplayValues
     DisplayPointsAndTicks,
 };
 
+enum ATRDisplaySubgraphs
+{
+    ATRSubgraphDefault,
+    ATRSubgraphLowVolatility,
+    ATRSubgraphHighVolatility,
+    ATRSubgraphExtremeVolatility
+};
+
 SCSFExport scsf_ATRDisplay(SCStudyInterfaceRef sc)
 {
     SCSubgraphRef Subgraph_ATR = sc.Subgraph[0];
+    SCSubgraphRef Subgraph_LowVolatility = sc.Subgraph[1];
+    SCSubgraphRef Subgraph_HighVolatility = sc.Subgraph[2];
+    SCSubgraphRef Subgraph_ExtremeVolatility = sc.Subgraph[3];
 
     SCInputRef Input_HorizontalPositionFromLeft = sc.Input[0];
     SCInputRef Input_VerticalPositionFromBottom = sc.Input[1];
@@ -19,6 +30,10 @@ SCSFExport scsf_ATRDisplay(SCStudyInterfaceRef sc)
     SCInputRef Input_UseBoldFont = sc.Input[5];
     SCInputRef Input_TransparentLabelBackground = sc.Input[6];
     SCInputRef Input_DrawAboveMainPriceGraph = sc.Input[7];
+    SCInputRef Input_ShowVolatilityWarnings = sc.Input[8];
+    SCInputRef Input_LowVolatilityThreshold = sc.Input[9];
+    SCInputRef Input_HighVolatilityThreshold = sc.Input[10];
+    SCInputRef Input_ExtremeVolatilityThreshold = sc.Input[11];
 
     if (sc.SetDefaults)
     {
@@ -35,6 +50,27 @@ SCSFExport scsf_ATRDisplay(SCStudyInterfaceRef sc)
         Subgraph_ATR.SecondaryColorUsed = 1;
         Subgraph_ATR.DrawStyle = DRAWSTYLE_CUSTOM_TEXT;
         Subgraph_ATR.LineWidth = 20;
+
+        Subgraph_LowVolatility.Name = "Low Volatility";
+        Subgraph_LowVolatility.PrimaryColor = COLOR_GRAY;
+        Subgraph_LowVolatility.SecondaryColor = COLOR_BLACK;
+        Subgraph_LowVolatility.SecondaryColorUsed = 1;
+        Subgraph_LowVolatility.DrawStyle = DRAWSTYLE_CUSTOM_TEXT;
+        Subgraph_LowVolatility.LineWidth = 20;
+
+        Subgraph_HighVolatility.Name = "High Volatility";
+        Subgraph_HighVolatility.PrimaryColor = COLOR_RED;
+        Subgraph_HighVolatility.SecondaryColor = COLOR_YELLOW;
+        Subgraph_HighVolatility.SecondaryColorUsed = 1;
+        Subgraph_HighVolatility.DrawStyle = DRAWSTYLE_CUSTOM_TEXT;
+        Subgraph_HighVolatility.LineWidth = 20;
+
+        Subgraph_ExtremeVolatility.Name = "Extreme Volatility";
+        Subgraph_ExtremeVolatility.PrimaryColor = COLOR_YELLOW;
+        Subgraph_ExtremeVolatility.SecondaryColor = COLOR_RED;
+        Subgraph_ExtremeVolatility.SecondaryColorUsed = 1;
+        Subgraph_ExtremeVolatility.DrawStyle = DRAWSTYLE_CUSTOM_TEXT;
+        Subgraph_ExtremeVolatility.LineWidth = 20;
 
         // Configure inputs
 
@@ -67,6 +103,21 @@ SCSFExport scsf_ATRDisplay(SCStudyInterfaceRef sc)
         Input_DrawAboveMainPriceGraph.Name = "Draw Above Main Price Graph";
         Input_DrawAboveMainPriceGraph.SetYesNo(1);
 
+        Input_ShowVolatilityWarnings.Name = "Show Volatility Warnings";
+        Input_ShowVolatilityWarnings.SetYesNo(0);
+
+        Input_LowVolatilityThreshold.Name = "Low Volatility Threshold";
+        Input_LowVolatilityThreshold.SetFloat(10);
+        Input_LowVolatilityThreshold.SetFloatLimits(0, FLT_MAX);
+
+        Input_HighVolatilityThreshold.Name = "High Volatility Threshold";
+        Input_HighVolatilityThreshold.SetFloat(30);
+        Input_HighVolatilityThreshold.SetFloatLimits(0, FLT_MAX);
+
+        Input_ExtremeVolatilityThreshold.Name = "Extreme Volatility Threshold";
+        Input_ExtremeVolatilityThreshold.SetFloat(50);
+        Input_ExtremeVolatilityThreshold.SetFloatLimits(0, FLT_MAX);
+
         return;
     }
 
@@ -82,7 +133,7 @@ SCSFExport scsf_ATRDisplay(SCStudyInterfaceRef sc)
     int index = Subgraph_ATR.Data.GetArraySize() - 1 - Input_ReferenceBarsBack.GetInt();
     float valuePoints = Subgraph_ATR[index];
 
-    // Display text label
+    // Format text label
     ATRDisplayValues displayValues = (ATRDisplayValues) Input_DisplayValues.GetIndex();
     SCString content;
     switch (displayValues)
@@ -100,5 +151,19 @@ SCSFExport scsf_ATRDisplay(SCStudyInterfaceRef sc)
         content.Format("ATR: %.2fP, %dT", valuePoints, sc.PriceValueToTicks(valuePoints));
         break;
     }
-    sc.AddAndManageSingleTextDrawingForStudy(sc, false, Input_HorizontalPositionFromLeft.GetInt(), Input_VerticalPositionFromBottom.GetInt(), Subgraph_ATR, Input_TransparentLabelBackground.GetYesNo(), content, Input_DrawAboveMainPriceGraph.GetYesNo(), Input_UseBoldFont.GetYesNo());
+
+    // Volatility warnings
+    int subgraphIndex = ATRSubgraphDefault;
+    if (Input_ShowVolatilityWarnings.GetYesNo())
+    {
+        if (valuePoints > Input_ExtremeVolatilityThreshold.GetFloat())
+            subgraphIndex = ATRSubgraphExtremeVolatility;
+        else if (valuePoints > Input_HighVolatilityThreshold.GetFloat())
+            subgraphIndex = ATRSubgraphHighVolatility;
+        else if (valuePoints < Input_LowVolatilityThreshold.GetFloat())
+            subgraphIndex = ATRSubgraphLowVolatility;
+    }
+
+    // Display text label
+    sc.AddAndManageSingleTextDrawingForStudy(sc, false, Input_HorizontalPositionFromLeft.GetInt(), Input_VerticalPositionFromBottom.GetInt(), sc.Subgraph[subgraphIndex], Input_TransparentLabelBackground.GetYesNo(), content, Input_DrawAboveMainPriceGraph.GetYesNo(), Input_UseBoldFont.GetYesNo());
 }

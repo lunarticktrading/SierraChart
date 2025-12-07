@@ -49,28 +49,28 @@ SCSFExport scsf_ATRDisplay(SCStudyInterfaceRef sc)
         Subgraph_ATR.SecondaryColor = COLOR_BLACK;
         Subgraph_ATR.SecondaryColorUsed = 1;
         Subgraph_ATR.DrawStyle = DRAWSTYLE_CUSTOM_TEXT;
-        Subgraph_ATR.LineWidth = 20;
+        Subgraph_ATR.LineWidth = 14;
 
         Subgraph_LowVolatility.Name = "Low Volatility";
         Subgraph_LowVolatility.PrimaryColor = COLOR_GRAY;
         Subgraph_LowVolatility.SecondaryColor = COLOR_BLACK;
         Subgraph_LowVolatility.SecondaryColorUsed = 1;
         Subgraph_LowVolatility.DrawStyle = DRAWSTYLE_CUSTOM_TEXT;
-        Subgraph_LowVolatility.LineWidth = 20;
+        Subgraph_LowVolatility.LineWidth = 14;
 
         Subgraph_HighVolatility.Name = "High Volatility";
         Subgraph_HighVolatility.PrimaryColor = COLOR_RED;
         Subgraph_HighVolatility.SecondaryColor = COLOR_YELLOW;
         Subgraph_HighVolatility.SecondaryColorUsed = 1;
         Subgraph_HighVolatility.DrawStyle = DRAWSTYLE_CUSTOM_TEXT;
-        Subgraph_HighVolatility.LineWidth = 20;
+        Subgraph_HighVolatility.LineWidth = 14;
 
         Subgraph_ExtremeVolatility.Name = "Extreme Volatility";
         Subgraph_ExtremeVolatility.PrimaryColor = COLOR_YELLOW;
         Subgraph_ExtremeVolatility.SecondaryColor = COLOR_RED;
         Subgraph_ExtremeVolatility.SecondaryColorUsed = 1;
         Subgraph_ExtremeVolatility.DrawStyle = DRAWSTYLE_CUSTOM_TEXT;
-        Subgraph_ExtremeVolatility.LineWidth = 20;
+        Subgraph_ExtremeVolatility.LineWidth = 14;
 
         // Configure inputs
 
@@ -123,6 +123,29 @@ SCSFExport scsf_ATRDisplay(SCStudyInterfaceRef sc)
 
     // Implementation
 
+    SCString& lastChartSymbol = sc.GetPersistentSCString(0);
+    int& symbolDecimalPlaces = sc.GetPersistentIntFast(0);
+    if (lastChartSymbol.IsEmpty() || lastChartSymbol.Compare(sc.Symbol) != 0)
+    {
+        lastChartSymbol = sc.Symbol;
+        symbolDecimalPlaces = 0;
+
+        float tickSize = sc.TickSize;
+
+        // Check if we have any decimal places
+        if (tickSize > floor(tickSize))
+        {
+            SCString tickSizeString;
+            tickSizeString.Format("%g", tickSize);
+            auto dotIndex = tickSizeString.IndexOf('.', 0);
+            symbolDecimalPlaces = (dotIndex >= 0) ? (tickSizeString.GetLength() - dotIndex - 1) : 0;
+        }
+
+        SCString message;
+        message.Format("Symbol [%s], tickSize [%g], decimal places [%d]", sc.Symbol.GetChars(), tickSize, symbolDecimalPlaces);
+        sc.AddMessageToLog(message, 0);
+    }
+
     // Calculate the ATR across all bars
     for (int i = sc.UpdateStartIndex; i < sc.ArraySize; i++)
     {
@@ -139,7 +162,7 @@ SCSFExport scsf_ATRDisplay(SCStudyInterfaceRef sc)
     switch (displayValues)
     {
     case DisplayPoints:
-        content.Format("ATR: %.2fP", valuePoints);
+        content.Format("ATR: %.*fP", symbolDecimalPlaces, valuePoints);
         break;
     
     case DisplayTicks:
@@ -148,7 +171,7 @@ SCSFExport scsf_ATRDisplay(SCStudyInterfaceRef sc)
     
     case DisplayPointsAndTicks:
     default:
-        content.Format("ATR: %.2fP, %dT", valuePoints, sc.PriceValueToTicks(valuePoints));
+        content.Format("ATR: %.*fP, %dT", symbolDecimalPlaces, valuePoints, sc.PriceValueToTicks(valuePoints));
         break;
     }
 

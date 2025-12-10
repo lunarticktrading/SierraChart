@@ -15,8 +15,18 @@ enum ATRDisplaySubgraphs
     ATRSubgraphExtremeVolatility
 };
 
-SCSFExport scsf_ATRDisplay(SCStudyInterfaceRef sc)
+enum ATRVolatilityLevels
 {
+    ATRVolatilityLevelDefault,
+    ATRVolatilityLevelLow,
+    ATRVolatilityLevelHigh,
+    ATRVolatilityLevelExtreme
+};
+
+SCSFExport scsf_LunarTick_ATRDisplay(SCStudyInterfaceRef sc)
+{
+    SCString message;
+
     SCSubgraphRef Subgraph_ATR = sc.Subgraph[0];
     SCSubgraphRef Subgraph_LowVolatility = sc.Subgraph[1];
     SCSubgraphRef Subgraph_HighVolatility = sc.Subgraph[2];
@@ -34,6 +44,9 @@ SCSFExport scsf_ATRDisplay(SCStudyInterfaceRef sc)
     SCInputRef Input_LowVolatilityThreshold = sc.Input[9];
     SCInputRef Input_HighVolatilityThreshold = sc.Input[10];
     SCInputRef Input_ExtremeVolatilityThreshold = sc.Input[11];
+    SCInputRef Input_LowVolatilityTradingLock = sc.Input[12];
+    SCInputRef Input_HighVolatilityTradingLock = sc.Input[13];
+    SCInputRef Input_ExtremeVolatilityTradingLock = sc.Input[14];
 
     if (sc.SetDefaults)
     {
@@ -107,16 +120,25 @@ SCSFExport scsf_ATRDisplay(SCStudyInterfaceRef sc)
         Input_ShowVolatilityWarnings.SetYesNo(0);
 
         Input_LowVolatilityThreshold.Name = "Low Volatility Threshold";
-        Input_LowVolatilityThreshold.SetFloat(10);
-        Input_LowVolatilityThreshold.SetFloatLimits(0, FLT_MAX);
+        Input_LowVolatilityThreshold.SetFloat(10.0f);
+        Input_LowVolatilityThreshold.SetFloatLimits(0.0f, FLT_MAX);
+
+        Input_LowVolatilityTradingLock.Name = "Lock Trading On Low Volatility";
+        Input_LowVolatilityTradingLock.SetYesNo(0);
 
         Input_HighVolatilityThreshold.Name = "High Volatility Threshold";
-        Input_HighVolatilityThreshold.SetFloat(30);
-        Input_HighVolatilityThreshold.SetFloatLimits(0, FLT_MAX);
+        Input_HighVolatilityThreshold.SetFloat(30.0f);
+        Input_HighVolatilityThreshold.SetFloatLimits(0.0f, FLT_MAX);
+
+        Input_HighVolatilityTradingLock.Name = "Lock Trading On High Volatility";
+        Input_HighVolatilityTradingLock.SetYesNo(0);
 
         Input_ExtremeVolatilityThreshold.Name = "Extreme Volatility Threshold";
-        Input_ExtremeVolatilityThreshold.SetFloat(50);
-        Input_ExtremeVolatilityThreshold.SetFloatLimits(0, FLT_MAX);
+        Input_ExtremeVolatilityThreshold.SetFloat(50.0f);
+        Input_ExtremeVolatilityThreshold.SetFloatLimits(0.0f, FLT_MAX);
+
+        Input_ExtremeVolatilityTradingLock.Name = "Lock Trading On Extreme Volatility";
+        Input_ExtremeVolatilityTradingLock.SetYesNo(0);
 
         return;
     }
@@ -125,6 +147,7 @@ SCSFExport scsf_ATRDisplay(SCStudyInterfaceRef sc)
 
     SCString& lastChartSymbol = sc.GetPersistentSCString(0);
     int& symbolDecimalPlaces = sc.GetPersistentIntFast(0);
+    int& previousVolatilityLevel = sc.GetPersistentIntFast(1);
     if (lastChartSymbol.IsEmpty() || lastChartSymbol.Compare(sc.Symbol) != 0)
     {
         lastChartSymbol = sc.Symbol;
@@ -176,15 +199,51 @@ SCSFExport scsf_ATRDisplay(SCStudyInterfaceRef sc)
     }
 
     // Volatility warnings
+    ATRVolatilityLevels volatilityLevel = ATRVolatilityLevelDefault;
     int subgraphIndex = ATRSubgraphDefault;
     if (Input_ShowVolatilityWarnings.GetYesNo())
     {
         if (valuePoints > Input_ExtremeVolatilityThreshold.GetFloat())
+        {
+            volatilityLevel = ATRVolatilityLevelExtreme;
             subgraphIndex = ATRSubgraphExtremeVolatility;
+        }
         else if (valuePoints > Input_HighVolatilityThreshold.GetFloat())
+        {
+            volatilityLevel = ATRVolatilityLevelHigh;
             subgraphIndex = ATRSubgraphHighVolatility;
+        }
         else if (valuePoints < Input_LowVolatilityThreshold.GetFloat())
+        {
+            volatilityLevel = ATRVolatilityLevelLow;
             subgraphIndex = ATRSubgraphLowVolatility;
+        }
+
+        // Volatility trading lockouts (only if not already locked AND not in a trade position)
+        s_SCPositionData positionData = s_SCPositionData();
+        if (!sc.TradingIsLocked && sc.GetTradePosition(positionData) != SCTRADING_ORDER_ERROR && positionData.PositionQuantity == 0.0)
+        {
+            if (Input_ExtremeVolatilityTradingLock.GetYesNo() && volatilityLevel == ATRVolatilityLevelExtreme && previousVolatilityLevel != ATRVolatilityLevelExtreme)
+            {
+                sc.SetTradingLockState(1);
+                message.Format("Trading locked due to extreme volatility!");
+                sc.AddMessageToLog(message, 0);
+            }
+            else if (Input_HighVolatilityTradingLock.GetYesNo() && volatilityLevel == ATRVolatilityLevelHigh && previousVolatilityLevel != ATRVolatilityLevelHigh)
+            {
+                sc.SetTradingLockState(1);
+                message.Format("Trading locked due to high volatility!");
+                sc.AddMessageToLog(message, 0);
+            }
+            else if (Input_LowVolatilityTradingLock.GetYesNo() && volatilityLevel == ATRVolatilityLevelLow && previousVolatilityLevel != ATRVolatilityLevelLow)
+            {
+                sc.SetTradingLockState(1);
+                message.Format("Trading locked due to low volatility!");
+                sc.AddMessageToLog(message, 0);
+            }
+        }
+
+        previousVolatilityLevel = (int)volatilityLevel;
     }
 
     // Display text label

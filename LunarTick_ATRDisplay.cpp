@@ -145,13 +145,24 @@ SCSFExport scsf_LunarTick_ATRDisplay(SCStudyInterfaceRef sc)
 
     // Implementation
 
-    SCString& lastChartSymbol = sc.GetPersistentSCString(0);
-    int& symbolDecimalPlaces = sc.GetPersistentIntFast(0);
-    int& previousVolatilityLevel = sc.GetPersistentIntFast(1);
-    if (lastChartSymbol.IsEmpty() || lastChartSymbol.Compare(sc.Symbol) != 0)
+    // Persistent variables
+    auto& r_lastChartSymbol = sc.GetPersistentSCString(0);
+
+    auto& r_symbolDecimalPlaces = sc.GetPersistentIntFast(0);
+    auto& r_previousVolatilityLevel = sc.GetPersistentIntFast(1);
+
+	// Reset persistent variables upon full calculation
+    if (sc.IsFullRecalculation && sc.Index == 0)
     {
-        lastChartSymbol = sc.Symbol;
-        symbolDecimalPlaces = 0;
+        r_lastChartSymbol = SCString("");
+        r_symbolDecimalPlaces = 0;
+        r_previousVolatilityLevel = 0;
+    }
+
+    if (r_lastChartSymbol.IsEmpty() || r_lastChartSymbol.Compare(sc.Symbol) != 0)
+    {
+        r_lastChartSymbol = sc.Symbol;
+        r_symbolDecimalPlaces = 0;
 
         float tickSize = sc.TickSize;
 
@@ -161,11 +172,11 @@ SCSFExport scsf_LunarTick_ATRDisplay(SCStudyInterfaceRef sc)
             SCString tickSizeString;
             tickSizeString.Format("%g", tickSize);
             auto dotIndex = tickSizeString.IndexOf('.', 0);
-            symbolDecimalPlaces = (dotIndex >= 0) ? (tickSizeString.GetLength() - dotIndex - 1) : 0;
+            r_symbolDecimalPlaces = (dotIndex >= 0) ? (tickSizeString.GetLength() - dotIndex - 1) : 0;
         }
 
         SCString message;
-        message.Format("Symbol [%s], tickSize [%g], decimal places [%d]", sc.Symbol.GetChars(), tickSize, symbolDecimalPlaces);
+        message.Format("Symbol [%s], tickSize [%g], decimal places [%d]", sc.Symbol.GetChars(), tickSize, r_symbolDecimalPlaces);
         sc.AddMessageToLog(message, 0);
     }
 
@@ -185,7 +196,7 @@ SCSFExport scsf_LunarTick_ATRDisplay(SCStudyInterfaceRef sc)
     switch (displayValues)
     {
     case DisplayPoints:
-        content.Format("ATR: %.*fP", symbolDecimalPlaces, valuePoints);
+        content.Format("ATR: %.*fP", r_symbolDecimalPlaces, valuePoints);
         break;
     
     case DisplayTicks:
@@ -194,7 +205,7 @@ SCSFExport scsf_LunarTick_ATRDisplay(SCStudyInterfaceRef sc)
     
     case DisplayPointsAndTicks:
     default:
-        content.Format("ATR: %.*fP, %dT", symbolDecimalPlaces, valuePoints, sc.PriceValueToTicks(valuePoints));
+        content.Format("ATR: %.*fP, %dT", r_symbolDecimalPlaces, valuePoints, sc.PriceValueToTicks(valuePoints));
         break;
     }
 
@@ -223,19 +234,19 @@ SCSFExport scsf_LunarTick_ATRDisplay(SCStudyInterfaceRef sc)
         s_SCPositionData positionData = s_SCPositionData();
         if (!sc.TradingIsLocked && sc.GetTradePosition(positionData) != SCTRADING_ORDER_ERROR && positionData.PositionQuantity == 0.0)
         {
-            if (Input_ExtremeVolatilityTradingLock.GetYesNo() && volatilityLevel == ATRVolatilityLevelExtreme && previousVolatilityLevel != ATRVolatilityLevelExtreme)
+            if (Input_ExtremeVolatilityTradingLock.GetYesNo() && volatilityLevel == ATRVolatilityLevelExtreme && r_previousVolatilityLevel != ATRVolatilityLevelExtreme)
             {
                 sc.SetTradingLockState(1);
                 message.Format("Trading locked due to extreme volatility!");
                 sc.AddMessageToLog(message, 0);
             }
-            else if (Input_HighVolatilityTradingLock.GetYesNo() && volatilityLevel == ATRVolatilityLevelHigh && previousVolatilityLevel != ATRVolatilityLevelHigh)
+            else if (Input_HighVolatilityTradingLock.GetYesNo() && volatilityLevel == ATRVolatilityLevelHigh && r_previousVolatilityLevel != ATRVolatilityLevelHigh)
             {
                 sc.SetTradingLockState(1);
                 message.Format("Trading locked due to high volatility!");
                 sc.AddMessageToLog(message, 0);
             }
-            else if (Input_LowVolatilityTradingLock.GetYesNo() && volatilityLevel == ATRVolatilityLevelLow && previousVolatilityLevel != ATRVolatilityLevelLow)
+            else if (Input_LowVolatilityTradingLock.GetYesNo() && volatilityLevel == ATRVolatilityLevelLow && r_previousVolatilityLevel != ATRVolatilityLevelLow)
             {
                 sc.SetTradingLockState(1);
                 message.Format("Trading locked due to low volatility!");
@@ -243,7 +254,7 @@ SCSFExport scsf_LunarTick_ATRDisplay(SCStudyInterfaceRef sc)
             }
         }
 
-        previousVolatilityLevel = (int)volatilityLevel;
+        r_previousVolatilityLevel = (int)volatilityLevel;
     }
 
     // Display text label

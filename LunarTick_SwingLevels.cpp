@@ -59,9 +59,9 @@ SCSFExport scsf_LunarTick_SwingLevels(SCStudyInterfaceRef sc)
     auto& r_pending_sl_value = sc.GetPersistentFloatFast(2); // Value of the pending SwingLow (not confirmed yet)
     auto& r_sl_value = sc.GetPersistentFloatFast(3);         // Value of the confirmed SwingLow
 
+	// Reset persistent variables upon full calculation
     if (sc.IsFullRecalculation && sc.Index == 0)
     {
-        // Reset persistent variables when doing a full recalculation
         r_prev_bar_index = 0;
 
         r_pending_sh_index = 0;
